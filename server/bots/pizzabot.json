@@ -1,0 +1,189 @@
+{
+  "id": "PIZZA",
+  "name": "PizzaBot",
+  "description": "Takes pizza orders and tracks deliveries for a pizzeria",
+  "locale": "en_US",
+  "voice": "",
+  "idleSessionTTL": 300,
+  "nluThreshold": 0.4,
+  "fallbackMessage": "Sorry, I didn't understand that. Could you rephrase?",
+  "welcome": "Hi! I'm PizzaBot. You can order a pizza or track an order.",
+  "codeHook": "// PizzaBot fulfillment Lambda — prices the order and issues an order id.\nexports.handler = async (event) => {\n  const intent = event.sessionState.intent;\n  const slot = (n) => intent.slots[n]?.value?.interpretedValue;\n  const attrs = event.sessionState.sessionAttributes || {};\n  console.log('Fulfilling', intent.name, JSON.stringify(intent.slots));\n\n  if (intent.name === 'OrderPizza') {\n    const prices = { Small: 199, Medium: 349, Large: 499 };\n    const qty = Number(slot('Quantity') || 1);\n    const total = (prices[slot('Size')] || 349) * qty;\n    const orderId = 'PZ' + Math.floor(1000 + Math.random() * 9000);\n    attrs.lastOrderId = orderId;\n    console.log('Created order', orderId, 'total', total);\n    return close(intent, attrs,\n      'Order ' + orderId + ' placed! ' + qty + ' ' + slot('Size') + ' ' + slot('PizzaType') +\n      (qty > 1 ? ' pizzas' : ' pizza') + ', total ' + total + ' rupees, arriving at ' + slot('DeliveryTime') + '.');\n  }\n\n  if (intent.name === 'CheckOrderStatus') {\n    const id = slot('OrderId');\n    const stages = ['being prepared', 'in the oven', 'out for delivery'];\n    return close(intent, attrs, 'Order ' + id + ' is ' + stages[id.length % 3] + '.');\n  }\n\n  return close(intent, attrs, 'Done!');\n};\n\nfunction close(intent, attrs, text) {\n  return {\n    sessionState: {\n      dialogAction: { type: 'Close' },\n      intent: { name: intent.name, state: 'Fulfilled' },\n      sessionAttributes: attrs,\n    },\n    messages: [{ contentType: 'PlainText', content: text }],\n  };\n}\n",
+  "slotTypes": [
+    {
+      "name": "PizzaType",
+      "description": "Menu items",
+      "resolution": "restrict",
+      "values": [
+        {
+          "value": "Margherita",
+          "synonyms": [
+            "cheese",
+            "plain cheese",
+            "classic"
+          ]
+        },
+        {
+          "value": "Pepperoni",
+          "synonyms": [
+            "peperoni",
+            "salami"
+          ]
+        },
+        {
+          "value": "Veggie Supreme",
+          "synonyms": [
+            "veggie",
+            "vegetarian",
+            "veg"
+          ]
+        },
+        {
+          "value": "Paneer Tikka",
+          "synonyms": [
+            "paneer"
+          ]
+        },
+        {
+          "value": "BBQ Chicken",
+          "synonyms": [
+            "chicken",
+            "barbecue chicken",
+            "barbecue"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "PizzaSize",
+      "description": "Pizza sizes",
+      "resolution": "restrict",
+      "values": [
+        {
+          "value": "Small",
+          "synonyms": [
+            "personal",
+            "regular",
+            "tiny"
+          ]
+        },
+        {
+          "value": "Medium",
+          "synonyms": [
+            "mid",
+            "normal"
+          ]
+        },
+        {
+          "value": "Large",
+          "synonyms": [
+            "big",
+            "family",
+            "huge",
+            "extra large"
+          ]
+        }
+      ]
+    }
+  ],
+  "versions": [],
+  "aliases": [
+    {
+      "name": "TestBotAlias",
+      "version": "DRAFT"
+    }
+  ],
+  "createdAt": "2026-10-06T03:44:58.932Z",
+  "updatedAt": "2026-10-06T03:44:58.932Z",
+  "intents": [
+    {
+      "id": "4F7JEGEH",
+      "name": "OrderPizza",
+      "description": "Order one or more pizzas for delivery",
+      "utterances": [
+        "I want to order a pizza",
+        "I would like a pizza",
+        "order a {Size} {PizzaType} pizza",
+        "get me a {PizzaType} pizza",
+        "can I get {Quantity} {PizzaType} pizzas",
+        "order pizza"
+      ],
+      "slots": [
+        {
+          "required": true,
+          "retryPrompt": "",
+          "name": "PizzaType",
+          "type": "PizzaType",
+          "prompt": "Which pizza would you like? We have Margherita, Pepperoni, Veggie Supreme, Paneer Tikka and BBQ Chicken."
+        },
+        {
+          "required": true,
+          "retryPrompt": "",
+          "name": "Size",
+          "type": "PizzaSize",
+          "prompt": "What size — small, medium or large?"
+        },
+        {
+          "required": true,
+          "retryPrompt": "",
+          "name": "Quantity",
+          "type": "AMAZON.Number",
+          "prompt": "How many pizzas?"
+        },
+        {
+          "required": true,
+          "retryPrompt": "",
+          "name": "DeliveryTime",
+          "type": "AMAZON.Time",
+          "prompt": "What time should we deliver?"
+        }
+      ],
+      "confirmationPrompt": "So that is {Quantity} {Size} {PizzaType}, delivered at {DeliveryTime}. Shall I place the order?",
+      "declinationResponse": "No problem, I've cancelled that order.",
+      "closingResponse": "Your order is placed!",
+      "fulfillmentEnabled": true
+    },
+    {
+      "id": "HONBTMCM",
+      "name": "CheckOrderStatus",
+      "description": "Track the status of an existing order using its order id",
+      "utterances": [
+        "where is my order",
+        "track my order",
+        "track order {OrderId}",
+        "what is the status of order {OrderId}",
+        "is my pizza on the way"
+      ],
+      "slots": [
+        {
+          "required": true,
+          "retryPrompt": "",
+          "name": "OrderId",
+          "type": "AMAZON.AlphaNumeric",
+          "prompt": "What is your order id? It looks like PZ1234."
+        }
+      ],
+      "confirmationPrompt": "",
+      "declinationResponse": "Okay, I won't do that.",
+      "closingResponse": "",
+      "fulfillmentEnabled": true
+    },
+    {
+      "id": "GN2R3Q0O",
+      "name": "Greeting",
+      "description": "User says hello or asks what the bot can do",
+      "utterances": [
+        "hi",
+        "hello",
+        "hey there",
+        "what can you do",
+        "help"
+      ],
+      "slots": [],
+      "confirmationPrompt": "",
+      "declinationResponse": "Okay, I won't do that.",
+      "closingResponse": "Hi! I'm PizzaBot. I can take a pizza order or track an existing one.",
+      "fulfillmentEnabled": false
+    }
+  ]
+}

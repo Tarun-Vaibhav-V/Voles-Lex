@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-squid: #232f3e;
+  --color-squid-2: #16191f;
+  --color-smile: #ff9900;
+  --color-action: #ec7211;
+  --color-action-dark: #eb5f07;
+  --color-link: #0073bb;
+  --color-canvas: #f2f3f3;
+  --color-line: #d5dbdb;
+  --color-ink: #16191f;
+  --color-muted: #545b64;
+  --color-ok: #1d8102;
+  --color-bad: #d13212;
+}
+
+html, body, #root { height: 100%; }
+body { background: var(--color-canvas); color: var(--color-ink); font-size: 14px; -webkit-font-smoothing: antialiased; }
+
+.scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: #c5cbd1; border-radius: 8px; }
+
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(236,114,17,.55); } 100% { box-shadow: 0 0 0 18px rgba(236,114,17,0); } }
+.pulse-ring { animation: pulse-ring 1.2s ease-out infinite; }
+
+@keyframes blink { 0%, 80%, 100% { opacity: .2 } 40% { opacity: 1 } }
+.dot { animation: blink 1.4s infinite both; }
+.dot:nth-child(2) { animation-delay: .2s; }
+.dot:nth-child(3) { animation-delay: .4s; }
+
+@keyframes slide-in { from { transform: translateX(16px); opacity: 0 } to { transform: none; opacity: 1 } }
+.slide-in { animation: slide-in .18s ease-out; }
