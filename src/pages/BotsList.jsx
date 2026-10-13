@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Bot, FileUp, LayoutTemplate, Plus, Sparkles, Trash2, Wand2, Mic, ShieldCheck, Cpu } from 'lucide-react';
+import { Bot, FileUp, LayoutTemplate, Plus, Sparkles, Trash2, Wand2, Mic, ShieldCheck } from 'lucide-react';
 import { actions, useStore } from '../store.js';
 import { go } from '../router.js';
 import { TEMPLATES, makeBot } from '../engine/templates.js';
@@ -29,9 +29,9 @@ export default function BotsList() {
             and adds an on-device LLM + Whisper voice agent. No cloud round-trips, no per-request bill.
           </p>
           <div className="flex flex-wrap gap-x-6 gap-y-2 mt-5 text-[13px] text-gray-200">
-            <span className="flex items-center gap-1.5"><Cpu size={15} className="text-smile" /> Gemma / Qwen via Ollama</span>
+            <span className="flex items-center gap-1.5"><Sparkles size={15} className="text-smile" /> Groq Cloud LPU Inference</span>
             <span className="flex items-center gap-1.5"><Mic size={15} className="text-smile" /> Whisper STT + barge-in</span>
-            <span className="flex items-center gap-1.5"><ShieldCheck size={15} className="text-smile" /> 0 bytes leave the device</span>
+            <span className="flex items-center gap-1.5"><ShieldCheck size={15} className="text-smile" /> Zero key exposure (local storage)</span>
           </div>
         </div>
       </div>
@@ -139,7 +139,7 @@ function CreateBotModal({ onClose }) {
 
       {mode === 'ai' && (
         <div className="space-y-3">
-          <Field label="Describe what your bot should do" hint={`Your local model (${settings.provider === 'webllm' ? settings.webllmModel : settings.model}) designs the intents, slots, slot types, utterances and prompts.`}>
+          <Field label="Describe what your bot should do" hint={`Groq AI (${settings.groqModel || 'llama-3.3-70b-versatile'}) designs the intents, slots, slot types, utterances and prompts.`}>
             <Textarea rows={3} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="e.g. A bot for a college canteen that takes food orders…" />
           </Field>
           <div className="flex flex-wrap gap-2">

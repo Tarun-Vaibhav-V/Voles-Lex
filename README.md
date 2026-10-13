@@ -1,10 +1,15 @@
-# VoxLex — a local-first Amazon Lex V2 simulator with an on-device LLM voice agent
+# VoxLex — an Amazon Lex V2 simulator with Groq LLM voice agent
 
-> **AWS Service Simulation & Enhancement** · Service simulated: **Amazon Lex V2** (with the Transcribe + Polly pieces a Lex voice bot uses)
+> **AWS Service Simulation & Enhancement** · Service simulated: **Amazon Lex V2** (with Transcribe + Polly pieces)
 
 VoxLex re-implements the Amazon Lex bot builder console and runtime as a web app: intents, sample utterances, slots and slot types, the Lex dialog state machine, Lambda fulfillment, versions & aliases, a test console and a `RecognizeText`-compatible REST API.
 
-On top of that it adds a **voice agent that runs entirely on your machine**. A local LLM (Gemma 3 via Ollama, or WebLLM in the browser) replaces Lex's utterance-matching NLU, Whisper does speech-to-text in the browser, and the OS voice engine speaks the replies. Nothing is sent to the cloud.
+On top of that it adds a **voice agent powered by Groq's ultra-fast LPU inference**. Groq (Llama 3.3 70B / Llama 3.1 8B) provides zero-shot NLU, Whisper does speech-to-text in the browser, and the OS voice engine speaks the replies.
+
+### 🔒 Security & Privacy (Zero API Key Exposure)
+- **No hardcoded secrets**: No API keys are embedded in source code, environment bundles, or git commits.
+- **Client-side isolation**: Each user inputs their own free Groq API key in the UI (**AI Settings** or top bar). The key is stored solely in their browser's `localStorage`.
+- **CORS-safe routing**: Requests are proxied via Vite (dev) and Netlify redirect rewrites (production) directly to Groq.
 
 ---
 
@@ -30,13 +35,13 @@ On top of that it adds a **voice agent that runs entirely on your machine**. A l
 
 ## 2. Enhancements beyond AWS
 
-1. **🧠 LLM NLU (zero-shot understanding).** A local LLM reads the bot schema and dialog context and returns intent, confidence and *every* slot it can find, as JSON constrained to a schema. "yo get me two big paneer pizzas around 8 tonight" fills 4 slots in one turn, where classic Lex falls back. An **anti-hallucination guard** rejects slot values that have no evidence in the user's words.
-2. **🎙️ On-device voice loop with barge-in.** Mic → energy VAD → **Whisper (transformers.js, WebGPU/WASM)** → bot → OS speech synthesis. Hands-free turn-taking, and you can **interrupt the bot mid-sentence**.
+1. **🧠 LLM NLU (zero-shot understanding).** Groq Llama 3.3 reads the bot schema and dialog context and returns intent, confidence and *every* slot it can find in one shot. "yo get me two big paneer pizzas around 8 tonight" fills 4 slots in one turn, where classic Lex falls back.
+2. **🎙️ Voice loop with barge-in.** Mic → energy VAD → **Whisper (transformers.js, WebGPU/WASM)** → bot → OS speech synthesis. Hands-free turn-taking, and you can **interrupt the bot mid-sentence**.
 3. **⚖️ Classic vs LLM "Compare" mode.** Every turn shows what stock Lex-style matching would have done.
-4. **✨ Describe-a-bot generator.** One sentence produces intents, slots, custom slot types, utterances and prompts. There's also an "Suggest utterances with AI" button on each intent.
-5. **🩺 Missed-utterance coach.** The LLM reviews failed turns and proposes which intent each belongs to, as a templated utterance. One click applies it.
-6. **💰 Cost & privacy meter.** Each turn is priced at AWS list prices (Lex + Transcribe + Polly + Lambda), with a monthly production projection. It also counts the bytes kept on-device.
-7. **📤 Export to real Amazon Lex.** Downloads a **Lex V2 import package (LexJson zip)** that can be imported in the AWS console.
+4. **✨ Describe-a-bot generator.** One sentence produces intents, slots, custom slot types, utterances and prompts.
+5. **🩺 Missed-utterance coach.** Groq reviews failed turns and proposes which intent each belongs to, as a templated utterance.
+6. **💰 Cost & privacy meter.** Each turn is priced at AWS list prices (Lex + Transcribe + Polly + Lambda).
+7. **📤 Export to real Amazon Lex.** Downloads a **Lex V2 import package (LexJson zip)** that can be imported into AWS console.
 
 ## 3. Architecture
 
@@ -48,45 +53,31 @@ flowchart LR
     WH --> ENG[Dialog engine<br/>src/engine]
     ENG --> TTS[speechSynthesis<br/>+ barge-in monitor]
     ENG --> LW[Lambda sandbox<br/>Web Worker]
-    ENG --> WL[WebLLM<br/>WebGPU, optional]
   end
-  ENG -- JSON-schema chat --> OL[(Ollama<br/>gemma3:4b)]
-  API[server/index.js<br/>Lex V2 runtime REST] --> ENG2[same engine] --> OL
+  ENG -- JSON-schema chat (User API Key) --> GQ[(Groq LPU Cloud<br/>Llama 3.3 70B)]
+  API[server/index.js<br/>Lex V2 runtime REST] --> ENG2[same engine] --> GQ
 ```
-
-The engine (`src/engine/*`) is plain ES modules with no DOM dependency, so the browser console and the Node REST server share the same code.
 
 ## 4. Running locally
 
 ```bash
-# 1. Local LLM
-ollama pull gemma3:4b          # or gemma3:1b / qwen2.5:1.5b on low-RAM machines
-
-# 2. Web app
+# 1. Install dependencies
 npm install
+
+# 2. Run dev server
 npm run dev                    # http://localhost:5173
 
-# 3. (optional) Lex-style REST runtime on :8787
-npm run server
-curl -X POST localhost:8787/bots/PIZZA/botAliases/TestBotAlias/botLocales/en_US/sessions/s1/text \
-     -H 'Content-Type: application/json' -d '{"text":"get me 2 large pepperoni pizzas at 8pm"}'
+# 3. Enter your Groq API Key
+# Open http://localhost:5173 -> Click "Groq Key Needed" -> Paste your key (from console.groq.com)
 ```
 
-Whisper weights (q8: 41 MB for `tiny.en`, 77 MB for `base.en`) download on first mic use in 2 MB chunks that are retried and **resumed** after a dropped connection or page reload, then cached by the browser. Until the download finishes, the voice loop uses the browser's speech recognition so the mic works right away.
+## 5. Deployment (Netlify)
 
-## 5. Deployment (GitHub Pages)
+VoxLex is configured with `netlify.toml` for 1-click Netlify deployment with automatic proxy routing for Groq API calls:
 
-The workflow in `.github/workflows/deploy.yml` builds and publishes to GitHub Pages on every push to `main`. Enable it under **Settings → Pages → Source: GitHub Actions**.
-
-The deployed site is static, and the AI still runs on the visitor's own machine:
-
-- **Zero install:** Local AI runtime → *WebLLM (in-browser)*. The model downloads once and runs on WebGPU (Chrome/Edge).
-- **With Ollama:** allow the site's origin, then restart Ollama:
-  ```bash
-  launchctl setenv OLLAMA_ORIGINS "https://<user>.github.io"   # macOS app
-  OLLAMA_ORIGINS="https://<user>.github.io" ollama serve        # CLI
-  ```
-  Chrome may ask for permission to access devices on your local network. Allow it.
+1. **Netlify Drop**: Run `npm run build`, then drag & drop the `dist/` directory onto [app.netlify.com/drop](https://app.netlify.com/drop).
+2. **Git Deployment**: Push to GitHub and connect the repository on Netlify. It will automatically build (`npm run build`) and serve `dist/`.
+3. Visitors simply enter their own Groq key when they open the live link. No secrets are stored on Netlify.
 
 ## 6. Demo script (≈3 min)
 

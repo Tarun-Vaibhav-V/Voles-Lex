@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Cpu, Globe, Mic, RefreshCw, Volume2, XCircle } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, Key, Lock, Mic, RefreshCw, Sparkles, Volume2, XCircle } from 'lucide-react';
 import { actions, useStore } from '../store.js';
-import { WEBLLM_MODELS, listOllamaModels, loadWebLLM, warmup } from '../engine/llm.js';
+import { GROQ_MODELS, validateGroqKey } from '../engine/llm.js';
 import { localVoices, onWhisperEvent, preloadWhisper } from '../voice/voiceAgent.js';
-import { Alert, Badge, Button, Code, Container, Field, Input, Select, Toggle, cx } from '../components/ui.jsx';
+import { Alert, Badge, Button, Container, Field, Input, Select, Toggle } from '../components/ui.jsx';
 
 const WHISPER_MODELS = [
   { id: 'onnx-community/whisper-tiny.en', label: 'Whisper tiny.en (41 MB, fastest — recommended)' },
@@ -14,83 +14,144 @@ const WHISPER_MODELS = [
 export default function Settings() {
   const s = useStore((x) => x.settings);
   const set = actions.setSettings;
-  const [models, setModels] = useState(null);
-  const [conn, setConn] = useState(null);
+  const [showKey, setShowKey] = useState(false);
+  const [valStatus, setValStatus] = useState(null); // 'validating' | 'ok' | 'error' | null
+  const [valMsg, setValMsg] = useState('');
   const [voices, setVoices] = useState([]);
   const [whisper, setWhisper] = useState(null);
-  const [webllm, setWebllm] = useState(null);
 
-  const refresh = async () => {
-    setConn('checking');
-    try { setModels(await listOllamaModels(s.ollamaUrl)); setConn('ok'); } catch (e) { setModels(null); setConn(e.message); }
-  };
-  useEffect(() => { refresh(); }, [s.ollamaUrl]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const load = () => setVoices(localVoices());
     load();
     window.speechSynthesis?.addEventListener('voiceschanged', load);
     return () => window.speechSynthesis?.removeEventListener('voiceschanged', load);
   }, []);
+
   useEffect(() => onWhisperEvent((m) => setWhisper(m.type === 'ready' ? `Ready ✓ (loaded in ${(m.ms / 1000).toFixed(1)} s)` : m.type === 'load-error' ? `Error: ${m.error}` : `Downloading ${Math.round(m.progress)}% (${(m.loaded / 1e6).toFixed(0)}/${(m.total / 1e6).toFixed(0)} MB)`)), []);
 
-  const origin = window.location.origin;
-  const isLocalhost = /localhost|127\.0\.0\.1/.test(origin);
+  const handleTestKey = async () => {
+    if (!s.groqApiKey?.trim()) {
+      setValStatus('error');
+      setValMsg('Please enter an API key first.');
+      return;
+    }
+    setValStatus('validating');
+    setValMsg('Testing connection to Groq API…');
+    try {
+      await validateGroqKey(s.groqApiKey, s.groqBaseUrl);
+      setValStatus('ok');
+      setValMsg('API key verified! Connected to Groq successfully.');
+    } catch (err) {
+      setValStatus('error');
+      setValMsg(err.message || 'Verification failed');
+    }
+  };
 
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Local AI runtime</h1>
-        <p className="text-muted">Where VoxLex runs its language model, speech recognition and speech synthesis. Everything here stays on this device.</p>
+        <h1 className="text-2xl font-bold">AI & Runtime Settings</h1>
+        <p className="text-muted">Configure Groq Cloud AI inference, speech recognition, and synthesis.</p>
       </div>
 
-      <Container title="Language model (NLU, bot generator, coach)">
-        <div className="grid md:grid-cols-2 gap-3 mb-5">
-          {[
-            { key: 'ollama', icon: Cpu, title: 'Ollama (recommended)', text: 'Runs Gemma 3 / Qwen natively on your Mac/PC GPU. Fastest and most accurate.' },
-            { key: 'webllm', icon: Globe, title: 'WebLLM (in-browser)', text: 'Runs a small model inside this tab via WebGPU. Zero install — works on the deployed site.' },
-          ].map((o) => (
-            <button key={o.key} onClick={() => set({ provider: o.key })} className={cx('rounded-lg border p-4 text-left', s.provider === o.key ? 'border-link ring-1 ring-link bg-blue-50/40' : 'border-line')}>
-              <div className="flex items-center gap-2 font-semibold"><o.icon size={16} className="text-action" />{o.title}</div>
-              <p className="text-xs text-muted mt-1">{o.text}</p>
-            </button>
-          ))}
-        </div>
-
-        {s.provider === 'ollama' ? (
-          <div className="space-y-4">
-            <div className="grid md:grid-cols-2 gap-4">
-              <Field label="Ollama URL"><Input value={s.ollamaUrl} onChange={(e) => set({ ollamaUrl: e.target.value })} /></Field>
-              <Field label="Model">
-                <div className="flex gap-2">
-                  <Select value={s.model} onChange={(e) => set({ model: e.target.value })}>
-                    {!models?.some((m) => m.name === s.model) && <option value={s.model}>{s.model} (not installed)</option>}
-                    {models?.map((m) => <option key={m.name} value={m.name}>{m.name} · {(m.size / 1e9).toFixed(1)} GB</option>)}
-                  </Select>
-                  <Button icon={RefreshCw} onClick={refresh} />
-                </div>
-              </Field>
+      <Container title="Language Model (Groq LPU Inference)">
+        <div className="space-y-4">
+          <Alert tone="ok">
+            <div className="flex items-start gap-2">
+              <Lock size={16} className="text-ok shrink-0 mt-0.5" />
+              <div className="text-xs leading-relaxed">
+                <span className="font-semibold text-ink">Zero API Key Exposure:</span> Your Groq API key is stored <b>only inside your browser's localStorage</b>. It is never embedded in the repository, never bundled in the frontend code, and never sent to any third party other than Groq.
+              </div>
             </div>
-            {conn === 'ok' && <Alert tone="ok"><span className="flex items-center gap-2"><CheckCircle2 size={15} className="text-ok" /> Connected to Ollama · {models.length} model(s) installed. <Button size="sm" variant="link" onClick={() => warmup(s)}>Warm up model</Button></span></Alert>}
-            {conn && conn !== 'ok' && conn !== 'checking' && (
-              <Alert tone="error">
-                <div className="flex items-center gap-2 font-semibold"><XCircle size={15} className="text-bad" /> Can't reach Ollama at {s.ollamaUrl}</div>
-                <p className="mt-1">Install from ollama.com, then run:</p>
-                <Code className="mt-2">{`ollama pull gemma3:4b\n${isLocalhost ? 'ollama serve' : `OLLAMA_ORIGINS="${origin}" ollama serve`}`}</Code>
-                {!isLocalhost && <p className="mt-2 text-xs">Because this page is served from <b>{origin}</b>, Ollama must allow that origin (OLLAMA_ORIGINS). On macOS app: <code>launchctl setenv OLLAMA_ORIGINS "{origin}"</code> then restart Ollama.</p>}
-              </Alert>
-            )}
-            <p className="text-xs text-muted">Recommended: <b>gemma3:4b</b> (best accuracy/speed), <b>gemma3:1b</b> or <b>qwen2.5:1.5b</b> on low-RAM machines.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <Field label="In-browser model" className="max-w-md">
-              <Select value={s.webllmModel} onChange={(e) => set({ webllmModel: e.target.value })}>{WEBLLM_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</Select>
+          </Alert>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <Field
+              label="Groq API Key"
+              hint={
+                <span>
+                  Don't have a key?{' '}
+                  <a
+                    href="https://console.groq.com/keys"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-link hover:underline font-medium"
+                  >
+                    Get a free key at console.groq.com →
+                  </a>
+                </span>
+              }
+            >
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showKey ? 'text' : 'password'}
+                    placeholder="gsk_..."
+                    value={s.groqApiKey || ''}
+                    onChange={(e) => {
+                      set({ groqApiKey: e.target.value.trim() });
+                      setValStatus(null);
+                    }}
+                    className="pr-10 font-mono text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-ink"
+                    title={showKey ? 'Hide key' : 'Show key'}
+                  >
+                    {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <Button
+                  onClick={handleTestKey}
+                  disabled={valStatus === 'validating'}
+                  icon={valStatus === 'validating' ? RefreshCw : Sparkles}
+                >
+                  {valStatus === 'validating' ? 'Testing…' : 'Test Key'}
+                </Button>
+              </div>
             </Field>
-            <Button onClick={async () => { setWebllm('Starting…'); try { await loadWebLLM(s.webllmModel, (t) => setWebllm(t)); setWebllm('Loaded ✓'); } catch (e) { setWebllm(`Error: ${e.message}`); } }}>Download & load model</Button>
-            {webllm && <p className="text-xs text-muted font-mono">{webllm}</p>}
-            {!('gpu' in navigator) && <Alert tone="warn">WebGPU isn't available in this browser. Use Chrome or Edge, or switch to Ollama.</Alert>}
+
+            <Field label="Groq Model" hint="Llama 3.3 70B delivers the highest accuracy for zero-shot slot extraction.">
+              <Select
+                value={s.groqModel || 'llama-3.3-70b-versatile'}
+                onChange={(e) => set({ groqModel: e.target.value })}
+              >
+                {GROQ_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           </div>
-        )}
+
+          {valStatus === 'ok' && (
+            <Alert tone="ok">
+              <span className="flex items-center gap-2">
+                <CheckCircle2 size={15} className="text-ok" />
+                {valMsg}
+              </span>
+            </Alert>
+          )}
+
+          {valStatus === 'error' && (
+            <Alert tone="error">
+              <span className="flex items-center gap-2">
+                <XCircle size={15} className="text-bad" />
+                {valMsg}
+              </span>
+            </Alert>
+          )}
+
+          {!s.groqApiKey && (
+            <div className="text-xs text-muted flex items-center gap-1.5 pt-1">
+              <Key size={13} className="text-amber-500" />
+              <span>Without an API key, Lex Classic utterance matching still works in the test console. Enter your key to enable the LLM zero-shot NLU, bot generator, and utterance coach.</span>
+            </div>
+          )}
+        </div>
       </Container>
 
       <Container title="Speech recognition (Transcribe)">
@@ -104,7 +165,9 @@ export default function Settings() {
           {s.stt === 'whisper' && (
             <Field label="Whisper model">
               <div className="flex gap-2">
-                <Select value={s.whisperModel} onChange={(e) => set({ whisperModel: e.target.value })}>{WHISPER_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</Select>
+                <Select value={s.whisperModel} onChange={(e) => set({ whisperModel: e.target.value })}>
+                  {WHISPER_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </Select>
                 <Button onClick={() => { setWhisper('Loading…'); preloadWhisper(s.whisperModel); }}>Preload</Button>
               </div>
             </Field>
@@ -122,7 +185,7 @@ export default function Settings() {
                 <option value="">System default</option>
                 {voices.map((v) => <option key={v.name} value={v.name}>{v.name} ({v.lang}){v.local ? ' · on-device' : ' · cloud'}</option>)}
               </Select>
-              <Button icon={Volume2} onClick={() => { const u = new SpeechSynthesisUtterance('Hi, I am your VoxLex voice agent, running entirely on this device.'); const v = speechSynthesis.getVoices().find((x) => x.name === s.voice); if (v) u.voice = v; speechSynthesis.cancel(); speechSynthesis.speak(u); }} />
+              <Button icon={Volume2} onClick={() => { const u = new SpeechSynthesisUtterance('Hi, I am your VoxLex voice agent, powered by Groq and Amazon Lex.'); const v = speechSynthesis.getVoices().find((x) => x.name === s.voice); if (v) u.voice = v; speechSynthesis.cancel(); speechSynthesis.speak(u); }} />
             </div>
           </Field>
           <div className="space-y-3 pt-1">

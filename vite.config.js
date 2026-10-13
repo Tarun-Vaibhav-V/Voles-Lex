@@ -7,5 +7,14 @@ export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss()],
   worker: { format: 'es' },
-  optimizeDeps: { exclude: ['@huggingface/transformers', '@mlc-ai/web-llm'] },
+  optimizeDeps: { exclude: ['@huggingface/transformers'] },
+  server: {
+    proxy: {
+      '/api/groq': {
+        target: 'https://api.groq.com/openai/v1',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/groq/, ''),
+      },
+    },
+  },
 })

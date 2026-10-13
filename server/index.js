@@ -14,8 +14,8 @@ import { fileURLToPath } from 'node:url';
 import { newSession, recognizeText } from '../src/engine/dialog.js';
 
 const PORT = +process.env.PORT || 8787;
-const OLLAMA = process.env.OLLAMA_URL || 'http://localhost:11434';
-const MODEL = process.env.VOXLEX_MODEL || 'gemma3:4b';
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+const MODEL = process.env.VOXLEX_MODEL || 'llama-3.3-70b-versatile';
 const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'bots');
 
 const bots = new Map();
@@ -95,7 +95,11 @@ http.createServer(async (req, res) => {
         sessions.set(key, session);
         const out = await recognizeText(target.def, session, body.text, {
           nluMode: body.nlu === 'classic' ? 'classic' : 'llm',
-          llmSettings: { provider: 'ollama', ollamaUrl: OLLAMA, model: body.model || MODEL },
+          llmSettings: {
+            groqApiKey: body.groqApiKey || GROQ_API_KEY,
+            groqModel: body.model || MODEL,
+            groqBaseUrl: 'https://api.groq.com/openai/v1',
+          },
           runCodeHook, aliasName, version: target.version,
         });
         console.log(`[${bot.name}/${aliasName}] "${body.text}" → ${out.sessionState.intent?.name} ${out.sessionState.dialogAction.type} (${out._voxlex.totalMs} ms)`);
@@ -106,4 +110,4 @@ http.createServer(async (req, res) => {
   } catch (e) {
     send(res, 500, { __type: 'InternalFailureException', message: e.message });
   }
-}).listen(PORT, () => console.log(`VoxLex runtime listening on http://localhost:${PORT} (LLM: ${MODEL} @ ${OLLAMA})`));
+}).listen(PORT, () => console.log(`VoxLex runtime listening on http://localhost:${PORT} (Groq LLM: ${MODEL})`));

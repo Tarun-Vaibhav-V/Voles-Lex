@@ -5,10 +5,9 @@ import { TEMPLATES } from './engine/templates.js';
 const KEY = 'voxlex:v1';
 
 const DEFAULT_SETTINGS = {
-  provider: 'ollama',
-  ollamaUrl: 'http://localhost:11434',
-  model: 'gemma3:4b',
-  webllmModel: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
+  groqApiKey: '',
+  groqModel: 'llama-3.3-70b-versatile',
+  groqBaseUrl: '/api/groq',
   nluMode: 'llm',
   stt: 'whisper',
   whisperModel: 'onnx-community/whisper-tiny.en',

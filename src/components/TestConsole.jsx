@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Braces, CircleStop, Cpu, Mic, RotateCcw, Send, ShieldCheck, Sparkles, Type, X, Zap } from 'lucide-react';
+import { Braces, CircleStop, Mic, RotateCcw, Send, ShieldCheck, Sparkles, Type, X, Zap } from 'lucide-react';
 import { actions, resolveAlias, useStore } from '../store.js';
 import { newSession, recognizeText } from '../engine/dialog.js';
 import { classicInterpret } from '../engine/classicNlu.js';
@@ -12,8 +12,8 @@ let runtimeServerDown = false; // stop probing the optional `npm run server` aft
 
 const NLU_MODES = [
   { key: 'classic', label: 'Classic', icon: Type, hint: 'Utterance matching, like stock Lex' },
-  { key: 'llm', label: 'LLM', icon: Sparkles, hint: 'Local LLM understands free-form speech' },
-  { key: 'compare', label: 'Compare', icon: Zap, hint: 'LLM drives the dialog; shows what Classic would have done' },
+  { key: 'llm', label: 'LLM', icon: Sparkles, hint: 'Groq LLM zero-shot understands free-form speech' },
+  { key: 'compare', label: 'Compare', icon: Zap, hint: 'Groq drives dialog; shows what Classic Lex would have done' },
 ];
 
 const VSTATE = {
@@ -76,6 +76,19 @@ export default function TestConsole({ bot, onClose }) {
     if (Date.now() - lastTurn.current > (def.idleSessionTTL || 300) * 1000) session.current = newSession();
     lastTurn.current = Date.now();
     const inputMode = extra.inputMode || 'Text';
+    if (md !== 'classic' && !st.groqApiKey?.trim()) {
+      setError('Groq API Key is required for LLM mode. Enter your key in AI Settings or switch to Classic.');
+      setMessages((m) => [
+        ...m,
+        { role: 'user', text, inputMode, sttMs: extra.sttMs, sttEngine: extra.sttEngine },
+        {
+          role: 'bot',
+          text: '⚠️ Groq API key is required for LLM mode. Please click the "Groq Key Needed" button in the top bar or open AI Settings to enter your free Groq API key. Alternatively, switch to "Classic" mode above.',
+          error: true,
+        },
+      ]);
+      return null;
+    }
     setMessages((m) => [...m, { role: 'user', text, inputMode, sttMs: extra.sttMs, sttEngine: extra.sttEngine }]);
     setBusy(true);
     setError('');
@@ -228,7 +241,17 @@ export default function TestConsole({ bot, onClose }) {
           ))}
         </div>
         <div className="text-[11px] text-muted mt-1.5 flex items-center gap-1">
-          {mode === 'classic' ? <>Sample-utterance matching · threshold {bot.nluThreshold}</> : <><Cpu size={11} /> {settings.provider === 'webllm' ? `WebLLM · ${settings.webllmModel.split('-').slice(0, 3).join(' ')}` : `Ollama · ${settings.model}`} · on-device</>}
+          {mode === 'classic' ? (
+            <>Sample-utterance matching · threshold {bot.nluThreshold}</>
+          ) : (
+            <>
+              <Sparkles size={11} className={settings.groqApiKey ? 'text-action' : 'text-amber-500'} />
+              <span>Groq · {settings.groqModel || 'llama-3.3-70b-versatile'}</span>
+              {!settings.groqApiKey && (
+                <span className="text-amber-600 font-semibold ml-1">(key needed)</span>
+              )}
+            </>
+          )}
         </div>
       </div>
 
