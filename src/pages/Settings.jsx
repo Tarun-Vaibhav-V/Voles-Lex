@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Eye, EyeOff, Key, Lock, Mic, RefreshCw, Sparkles, Volume2, XCircle } from 'lucide-react';
 import { actions, useStore } from '../store.js';
-import { GROQ_MODELS, validateGroqKey } from '../engine/llm.js';
+import { GROQ_MODELS, fetchGroqModels, validateGroqKey } from '../engine/llm.js';
 import { localVoices, onWhisperEvent, preloadWhisper } from '../voice/voiceAgent.js';
 import { Alert, Badge, Button, Container, Field, Input, Select, Toggle } from '../components/ui.jsx';
 
@@ -19,6 +19,7 @@ export default function Settings() {
   const [valMsg, setValMsg] = useState('');
   const [voices, setVoices] = useState([]);
   const [whisper, setWhisper] = useState(null);
+  const [models, setModels] = useState(GROQ_MODELS);
 
   useEffect(() => {
     const load = () => setVoices(localVoices());
@@ -29,6 +30,14 @@ export default function Settings() {
 
   useEffect(() => onWhisperEvent((m) => setWhisper(m.type === 'ready' ? `Ready ✓ (loaded in ${(m.ms / 1000).toFixed(1)} s)` : m.type === 'load-error' ? `Error: ${m.error}` : `Downloading ${Math.round(m.progress)}% (${(m.loaded / 1e6).toFixed(0)}/${(m.total / 1e6).toFixed(0)} MB)`)), []);
 
+  useEffect(() => {
+    if (s.groqApiKey) {
+      fetchGroqModels(s.groqApiKey, s.groqBaseUrl)
+        .then((m) => { if (m && m.length > 0) setModels(m); })
+        .catch(() => {});
+    }
+  }, [s.groqApiKey, s.groqBaseUrl]);
+
   const handleTestKey = async () => {
     if (!s.groqApiKey?.trim()) {
       setValStatus('error');
@@ -36,11 +45,18 @@ export default function Settings() {
       return;
     }
     setValStatus('validating');
-    setValMsg('Testing connection to Groq API…');
+    setValMsg('Connecting to Groq API…');
     try {
-      await validateGroqKey(s.groqApiKey, s.groqBaseUrl);
+      const res = await validateGroqKey(s.groqApiKey, s.groqBaseUrl);
+      if (res.models && res.models.length > 0) {
+        setModels(res.models);
+        // If current model not in available list, set to first available
+        if (!res.models.some((m) => m.id === s.groqModel)) {
+          set({ groqModel: res.models[0].id });
+        }
+      }
       setValStatus('ok');
-      setValMsg('API key verified! Connected to Groq successfully.');
+      setValMsg(`API key verified! Connected to Groq (${res.models.length} active models loaded).`);
     } catch (err) {
       setValStatus('error');
       setValMsg(err.message || 'Verification failed');
@@ -113,14 +129,17 @@ export default function Settings() {
               </div>
             </Field>
 
-            <Field label="Groq Model" hint="Llama 3.3 70B delivers the highest accuracy for zero-shot slot extraction.">
+            <Field label="Groq Model" hint="Select the model for NLU slot extraction and bot generation.">
               <Select
-                value={s.groqModel || 'llama-3.3-70b-versatile'}
+                value={s.groqModel || (models[0]?.id || 'llama-3.3-70b-versatile')}
                 onChange={(e) => set({ groqModel: e.target.value })}
               >
-                {GROQ_MODELS.map((m) => (
+                {!models.some((m) => m.id === s.groqModel) && s.groqModel && (
+                  <option value={s.groqModel}>{s.groqModel}</option>
+                )}
+                {models.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.label}
+                    {m.label || m.id}
                   </option>
                 ))}
               </Select>

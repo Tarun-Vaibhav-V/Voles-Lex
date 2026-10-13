@@ -3,31 +3,26 @@
 // browser (localStorage) and never exposed or logged.
 
 export const GROQ_MODELS = [
-  { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B Versatile (Recommended)' },
-  { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant (Ultra-fast)' },
-  { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B (32k context)' },
-  { id: 'gemma2-9b-it', label: 'Gemma 2 9B IT' },
+  { id: 'llama-3.3-70b-versatile', label: 'llama-3.3-70b-versatile (Recommended)' },
+  { id: 'llama-3.1-8b-instant', label: 'llama-3.1-8b-instant (Fast)' },
+  { id: 'gemma2-9b-it', label: 'gemma2-9b-it' },
+  { id: 'mixtral-8x7b-32768', label: 'mixtral-8x7b-32768' },
 ];
 
 /**
- * Validates a Groq API key by sending a tiny test request.
+ * Fetch the live list of available chat models for this Groq API key.
  */
-export async function validateGroqKey(apiKey, baseUrl = '/api/groq') {
-  if (!apiKey || !apiKey.trim()) throw new Error('API key cannot be empty');
+export async function fetchGroqModels(apiKey, baseUrl = '/api/groq') {
+  if (!apiKey || !apiKey.trim()) return GROQ_MODELS;
   const base = baseUrl.replace(/\/$/, '');
-  const r = await fetch(`${base}/chat/completions`, {
-    method: 'POST',
+  const r = await fetch(`${base}/models`, {
     headers: {
-      'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey.trim()}`,
     },
-    body: JSON.stringify({
-      model: 'llama-3.1-8b-instant',
-      messages: [{ role: 'user', content: 'ping' }],
-      max_tokens: 1,
-    }),
   });
+
   if (!r.ok) {
+    if (r.status === 401) throw new Error('Invalid Groq API key (401 Unauthorized)');
     const txt = await r.text().catch(() => '');
     try {
       const j = JSON.parse(txt);
@@ -35,10 +30,26 @@ export async function validateGroqKey(apiKey, baseUrl = '/api/groq') {
     } catch (e) {
       if (e.message && !e.message.startsWith('Unexpected')) throw e;
     }
-    if (r.status === 401) throw new Error('Invalid Groq API key (401 Unauthorized)');
     throw new Error(`Groq API error HTTP ${r.status}`);
   }
-  return true;
+
+  const j = await r.json();
+  const list = (j.data || [])
+    .filter((m) => !m.id.includes('whisper') && !m.id.includes('guard') && !m.id.includes('vision'))
+    .map((m) => ({ id: m.id, label: m.id }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  return list.length > 0 ? list : GROQ_MODELS;
+}
+
+/**
+ * Validates a Groq API key by querying the models endpoint.
+ * This guarantees verification without failing on hardcoded model IDs.
+ */
+export async function validateGroqKey(apiKey, baseUrl = '/api/groq') {
+  if (!apiKey || !apiKey.trim()) throw new Error('API key cannot be empty');
+  const models = await fetchGroqModels(apiKey, baseUrl);
+  return { ok: true, models };
 }
 
 /**
